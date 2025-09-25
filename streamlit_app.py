@@ -13,13 +13,13 @@ st.title("Urdu to Roman Urdu Translation")
 def load_model():
     try:
         # Load vocabularies
-        with open("urdu_vocab_improved.json", "r", encoding="utf-8") as f:
+        with open("static/urdu_vocab.json", "r", encoding="utf-8") as f:
             urdu_vocab_map = json.load(f)
         
-        with open("roman_vocab.json", "r", encoding="utf-8") as f:
+        with open("static/roman_vocab.json", "r", encoding="utf-8") as f:
             roman_vocab_map = json.load(f)
             
-        with open("urdu_merges_improved.json", "r", encoding="utf-8") as f:
+        with open("static/urdu_merges.json", "r", encoding="utf-8") as f:
             urdu_merges = json.load(f)
         
         # Load model (adjust with your model loading code)
