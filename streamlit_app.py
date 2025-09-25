@@ -30,9 +30,7 @@ def load_model():
         st.error(f"Error loading model: {e}")
         return None, None, None, None
 
-# Helper functions
 def merge_pair(tokens, pair, new_token):
-    """Merge a specific pair in a sequence."""
     result = []
     i = 0
     while i < len(tokens):
@@ -45,7 +43,6 @@ def merge_pair(tokens, pair, new_token):
     return result
 
 def tokenize_urdu(text, urdu_merges, urdu_vocab_map):
-    """Tokenize Urdu text with word boundary markers."""
     # Clean text
     text = unicodedata.normalize('NFC', text)
     text = re.sub(r'[^\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\u0900-\u097F\s\n]', '', text)
@@ -69,6 +66,57 @@ def tokenize_urdu(text, urdu_merges, urdu_vocab_map):
     
     return tokens, indices
 
+def simple_translate(src_tensor, model, roman_vocab_map, max_len=350):
+    """Simple greedy translation without beam search"""
+    # Get output vocabulary size
+    output_size = len(roman_vocab_map) + 1
+    device = src_tensor.device
+    batch_size = src_tensor.shape[0]
+    
+    # Create output tensor
+    outputs = torch.zeros(batch_size, max_len, dtype=torch.long).to(device)
+    outputs[:, 0] = 1  # Start with <sos> token index (assuming it's 1)
+    
+    with torch.no_grad():
+        # Forward pass through encoder
+        if hasattr(model, 'encoder') and hasattr(model, 'decoder'):
+            # For seq2seq model with encoder and decoder
+            encoder_outputs, hidden, cell = model.encoder(src_tensor)
+            
+            # Prepare decoder hidden and cell states
+            if hasattr(model.decoder, 'num_layers'):
+                num_layers = model.decoder.num_layers
+                hidden_size = hidden.size(-1)
+                hidden = hidden.unsqueeze(0).repeat(num_layers, 1, 1)
+                cell = cell.unsqueeze(0).repeat(num_layers, 1, 1)
+                
+            # Generate one token at a time
+            for t in range(1, max_len):
+                input_t = outputs[:, t-1].unsqueeze(1)
+                
+                # Decode one step
+                if hasattr(model.decoder, 'attention'):
+                    # For models with attention
+                    output, hidden, cell, _ = model.decoder(input_t, hidden, cell, encoder_outputs)
+                else:
+                    # For models without attention
+                    output, (hidden, cell) = model.decoder(input_t, (hidden, cell))
+                
+                # Get most likely next token
+                top_token = output.argmax(1)
+                outputs[:, t] = top_token
+                
+                # Stop if all sequences have generated EOS (index 2)
+                if (top_token == 2).all():
+                    break
+                
+        else:
+            # Simpler model without explicit encoder-decoder
+            st.warning("Model structure not recognized. Using simple forwarding.")
+            outputs = model(src_tensor)
+            
+    return outputs
+
 def translate_text(text, model, urdu_merges, urdu_vocab_map, roman_vocab_map):
     """Translate Urdu text to Roman Urdu."""
     try:
@@ -78,15 +126,13 @@ def translate_text(text, model, urdu_merges, urdu_vocab_map, roman_vocab_map):
         # Convert to tensor
         src_tensor = torch.tensor([indices], dtype=torch.long)
         
-        # Translate
-        with torch.no_grad():
-            # Assuming your model has beam_search or translate method
-            output = model.beam_search(src_tensor, beam_width=3, max_len=350)
+        # Translate using simple greedy decoding instead of beam search
+        output = simple_translate(src_tensor, model, roman_vocab_map, max_len=350)
             
         # Convert output indices to text
         translation = []
         for idx in output[0, 1:].cpu().numpy():  # Skip <sos>
-            if idx >= len(roman_vocab_map):  # Skip padding
+            if idx >= len(roman_vocab_map) or idx == 0:  # Skip padding and unknown
                 continue
             token = next((k for k, v in roman_vocab_map.items() if v == idx), None)
             if token == '<eos>':
