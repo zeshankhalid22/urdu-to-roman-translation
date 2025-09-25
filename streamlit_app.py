@@ -4,162 +4,82 @@ import torch.nn as nn
 import json
 import re
 import unicodedata
-from PIL import Image
-import base64
+import random
 
-# Page configuration with custom theme
+# Set page title and configuration
 st.set_page_config(
-    page_title="Urdu to Roman Urdu Translator",
-    page_icon="🔤",
+    page_title="Urdu-Roman Translator",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
-# Custom CSS for styling
-def add_custom_css():
-    st.markdown("""
-    <style>
-        /* Main page styling */
-        .main {
-            background-color: #f7f7f7;
-            padding: 20px;
-        }
-        
-        /* Header styling */
-        .header-container {
-            background-color: #f0f2f6;
-            padding: 1.5rem;
-            border-radius: 10px;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            text-align: center;
-        }
-        
-        /* Text areas */
-        .stTextArea textarea {
-            border-radius: 8px;
-            border: 1px solid #e0e0e0;
-            padding: 10px;
-            font-size: 16px;
-            font-family: 'Jameel Noori Nastaleeq', Arial, sans-serif;
-        }
-        
-        /* Translation result container */
-        .result-container {
-            background-color: #f0f2f6;
-            padding: 1.5rem;
-            border-radius: 10px;
-            margin-top: 1rem;
-            border-left: 5px solid #4CAF50;
-        }
-        
-        /* Button styling */
-        .stButton button {
-            border-radius: 8px;
-            padding: 0.5rem 1rem;
-            font-weight: 500;
-            transition: all 0.2s ease;
-            width: 100%;
-            margin-bottom: 0.5rem;
-        }
-        .stButton button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-        
-        /* Example buttons with custom colors */
-        .example-btn-1 button {
-            background-color: #5c6bc0;
-            color: white;
-        }
-        .example-btn-2 button {
-            background-color: #26a69a;
-            color: white;
-        }
-        .example-btn-3 button {
-            background-color: #ec407a;
-            color: white;
-        }
-        .example-btn-4 button {
-            background-color: #ffa726;
-            color: white;
-        }
-        .example-btn-5 button {
-            background-color: #7e57c2;
-            color: white;
-        }
-        
-        /* Footer styling */
-        .footer {
-            text-align: center;
-            margin-top: 2rem;
-            padding-top: 1rem;
-            border-top: 1px solid #e0e0e0;
-            font-size: 0.8rem;
-            color: #666;
-        }
-        
-        /* Card layout for examples */
-        .card-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 1rem;
-            margin: 1rem 0;
-        }
-        
-        .card {
-            padding: 1rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            background-color: white;
-            transition: transform 0.2s;
-            height: 100%;
-        }
-        
-        .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        }
-        
-        /* Loading animation */
-        .loading-spinner {
-            text-align: center;
-            padding: 2rem;
-        }
-        
-        /* Tab styling */
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 10px;
-        }
-        
-        .stTabs [data-baseweb="tab"] {
-            border-radius: 4px 4px 0px 0px;
-            padding: 10px 20px;
-            background-color: #f0f2f6;
-        }
-        
-        .stTabs [aria-selected="true"] {
-            background-color: #4CAF50 !important;
-            color: white !important;
-        }
-        
-        /* Hide Streamlit branding */
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-    </style>
-    """, unsafe_allow_html=True)
-
-add_custom_css()
-
-# Header with logo
+# Custom CSS for professional styling
 st.markdown("""
-<div class="header-container">
-    <h1>Urdu to Roman Urdu Translator</h1>
-    <p>Neural Machine Translation for Urdu Poetry and Text</p>
-</div>
+<style>
+    /* Main container styling */
+    .main {
+        background-color: #ffffff;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 1rem;
+    }
+    
+    /* Header styling */
+    h1, h2, h3 {
+        color: #1a237e;
+        margin-bottom: 1rem;
+    }
+    
+    /* Translation containers */
+    .translation-box {
+        background-color: #f5f7fa;
+        border-radius: 5px;
+        border-left: 3px solid #1a237e;
+        padding: 15px;
+        margin: 10px 0;
+    }
+    
+    /* Button styling */
+    .stButton button {
+        background-color: #1a237e;
+        color: white;
+        border-radius: 4px;
+        border: none;
+        padding: 0.5rem 1rem;
+        font-weight: normal;
+    }
+    
+    .stButton button:hover {
+        background-color: #3949ab;
+    }
+    
+    /* Footer styling */
+    .footer {
+        margin-top: 2rem;
+        text-align: center;
+        color: #666;
+        font-size: 0.8rem;
+        border-top: 1px solid #eee;
+        padding-top: 1rem;
+    }
+    
+    /* Urdu text styling */
+    .urdu-text {
+        font-family: 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', serif;
+        font-size: 1.2rem;
+        line-height: 2;
+        text-align: right;
+        direction: rtl;
+    }
+    
+    /* Remove Streamlit default elements */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    .reportview-container .main footer {visibility: hidden;}
+</style>
 """, unsafe_allow_html=True)
 
-# Model definitions (unchanged)
+# Model architecture (unchanged)
 class Encoder(nn.Module):
     def __init__(self, input_size, embed_size, hidden_size, num_layers=1, dropout=0.1):
         super(Encoder, self).__init__()
@@ -268,9 +188,91 @@ class Seq2Seq(nn.Module):
         self.decoder = decoder
         self.device = device
 
-    def forward(self, src, tgt, teacher_forcing_ratio=0.5):
-        # Not used for inference
-        pass
+    def beam_search(self, src, beam_width=3, max_len=100):
+        """Generate translations using beam search for better results."""
+        batch_size = src.shape[0]
+        sos_idx = 0  # Start token
+        eos_idx = 2  # End token
+
+        # Encode the source sequence
+        encoder_outputs, hidden, cell = self.encoder(src)
+
+        # Prepare decoder states
+        hidden = hidden.unsqueeze(0).repeat(self.decoder.num_layers, 1, 1)
+        cell = cell.unsqueeze(0).repeat(self.decoder.num_layers, 1, 1)
+
+        # Initialize beam
+        # Each beam contains: (cumulative_score, sequence, current_input, hidden, cell, token_history)
+        beams = [(0, [sos_idx], torch.tensor([sos_idx], device=src.device), 
+                  hidden, cell, set())]
+        completed_beams = []
+
+        # Beam search
+        for _ in range(max_len):
+            candidates = []
+
+            for score, seq, inp, h, c, history in beams:
+                # If sequence ends with EOS, add to completed
+                if seq[-1] == eos_idx:
+                    completed_beams.append((score, seq))
+                    continue
+
+                # Pass through decoder with attention
+                output, new_h, new_c, _ = self.decoder(inp, h, c, encoder_outputs)
+
+                # Get top-k probabilities and tokens
+                log_probs, top_indices = output.log_softmax(1).topk(beam_width)
+
+                # Create new candidates
+                for i in range(beam_width):
+                    token = top_indices[0, i].item()
+                    log_prob = log_probs[0, i].item()
+
+                    # Apply repetition penalty
+                    rep_penalty = 1.0
+                    if token in history:
+                        rep_penalty = 0.7  # Reduce probability of repetition
+
+                    # Create new sequence
+                    new_seq = seq + [token]
+                    new_score = score + log_prob * rep_penalty
+                    new_input = torch.tensor([token], device=src.device)
+
+                    # Add to history (keep recent history)
+                    new_history = history.copy()
+                    if len(new_history) > 5:
+                        new_history.pop()
+                    new_history.add(token)
+
+                    candidates.append((new_score, new_seq, new_input, new_h, new_c, new_history))
+
+                    # If token is EOS, also add to completed
+                    if token == eos_idx:
+                        completed_beams.append((new_score, new_seq))
+
+            # Keep only top beam_width candidates
+            beams = sorted(candidates, key=lambda x: x[0], reverse=True)[:beam_width]
+
+            # Early stop if all beams have completed
+            if len(beams) == 0:
+                break
+
+        # If no complete sequences found, use best incomplete one
+        if not completed_beams and beams:
+            completed_beams = [(beams[0][0], beams[0][1])]
+
+        # Sort completed beams by score
+        completed_beams = sorted(completed_beams, key=lambda x: x[0], reverse=True)
+
+        # Return the best beam
+        best_seq = completed_beams[0][1] if completed_beams else [sos_idx]
+
+        # Create output tensor
+        output = torch.zeros(1, max_len, dtype=torch.long, device=src.device)
+        for i, token in enumerate(best_seq[:max_len]):
+            output[0, i] = token
+
+        return output
 
     def translate(self, src, max_len=350):
         """Simple greedy decoding"""
@@ -309,7 +311,7 @@ class Seq2Seq(nn.Module):
         
         return outputs
 
-# Helper function to load model (unchanged)
+# Helper function to load model
 @st.cache_resource
 def load_model():
     try:
@@ -359,8 +361,9 @@ def load_model():
         st.error(traceback.format_exc())
         return None, None, None, None
 
-# Helper functions (unchanged)
+# Helper functions
 def merge_pair(tokens, pair, new_token):
+    """Merge a specific pair in a sequence."""
     result = []
     i = 0
     while i < len(tokens):
@@ -373,6 +376,7 @@ def merge_pair(tokens, pair, new_token):
     return result
 
 def tokenize_urdu(text, urdu_merges, urdu_vocab_map):
+    """Tokenize Urdu text with word boundary markers."""
     # Clean text
     text = unicodedata.normalize('NFC', text)
     text = re.sub(r'[^\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\u0900-\u097F\s\n]', '', text)
@@ -396,7 +400,8 @@ def tokenize_urdu(text, urdu_merges, urdu_vocab_map):
     
     return tokens, indices
 
-def translate_text(text, model, urdu_merges, urdu_vocab_map, roman_vocab_map):
+def translate_with_beam_search(text, model, urdu_merges, urdu_vocab_map, roman_vocab_map, beam_width=3, max_len=350):
+    """Translate Urdu text to Roman Urdu using beam search."""
     try:
         # Tokenize
         _, indices = tokenize_urdu(text, urdu_merges, urdu_vocab_map)
@@ -404,9 +409,9 @@ def translate_text(text, model, urdu_merges, urdu_vocab_map, roman_vocab_map):
         # Convert to tensor
         src_tensor = torch.tensor([indices], dtype=torch.long)
         
-        # Translate
+        # Translate with beam search
         with torch.no_grad():
-            output = model.translate(src_tensor)
+            output = model.beam_search(src_tensor, beam_width=beam_width, max_len=max_len)
             
         # Convert output indices to text
         translation = []
@@ -426,163 +431,82 @@ def translate_text(text, model, urdu_merges, urdu_vocab_map, roman_vocab_map):
         import traceback
         return f"Translation error: {str(e)}"
 
-# Example poetry
-example_1 = """دل نے وفا کے نام پر کار وفا نہیں کیا خود کو ہلاک کر لیا خود کو فدا نہیں کیا خیرہ سران شوق کا کوئی نہیں ہے جنبہ دار شہر میں اس گروہ نے کس کو خفا نہیں کیا جو بھی ہو تم پہ معترض اس کو یہی جواب دو آپ بہت شریف ہیں آپ نے کیا نہیں کیا نسبت علم ہے بہت حاکم وقت کو عزیز اس نے تو کار جہل بھی بے علما نہیں کیا جس کو بھی شیخ و شاہ نے حکم خدا دیا قرار ہم نے نہیں کیا وہ کام ہاں بہ خدا نہیں کیا"""
+# Main application header
+st.title("Urdu to Roman Urdu Translator")
+st.write("Neural machine translation using sequence-to-sequence model with attention mechanism")
 
-example_2 = """دیا سا دل کے خرابے میں جل رہا ہے میاں دیے کے گرد کوئی عکس چل رہا ہے میاں یہ روح رقص چراغاں ہے اپنے حلقے میں یہ جسم سایہ ہے اور سایہ ڈھل رہا میاں یہ آنکھ پردہ ہے اک گردش تحیر کا یہ دل نہیں ہے بگولہ اچھل رہا ہے میاں کبھی کسی کا گزرنا کبھی ٹھہر جانا مرے سکوت میں کیا کیا خلل رہا ہے میاں کسی کی راہ میں افلاک زیر پا ہوتے یہاں تو پاؤں سے صحرا نکل رہا ہے میاں ہجوم شوخ میں یہ دل ہی بے غرض نکلا چلو کوئی تو حریفانہ چل رہا ہے میاں تجھے ابھی سے پڑی ہے کہ فیصلہ ہو جائے نہ جانے کب سے یہاں وقت ٹل رہا ہے میاں طبیعتوں ہی کے ملنے سے تھا مزہ باقی سو وہ مزہ بھی کہاں آج کل رہا ہے میاں غموں کی فصل میں جس غم کو رائیگاں سمجھیں خوشی تو یہ ہے کہ وہ غم بھی پھل رہا ہے میاں لکھا نصیرؔ نے ہر رنگ میں سفید و"""
-
-example_3 = """بجا کہ آنکھ میں نیندوں کے سلسلے بھی نہیں شکست خواب کے اب مجھ میں حوصلے بھی نہیں نہیں نہیں یہ خبر دشمنوں نے دی ہوگی وہ آئے آ کے چلے بھی گئے ملے بھی نہیں یہ کون لوگ اندھیروں کی بات کرتے ہیں ابھی تو چاند تری یاد کے ڈھلے بھی نہیں ابھی سے میرے رفوگر کے ہاتھ تھکنے لگے ابھی تو چاک مرے زخم کے سلے بھی نہیں خفا اگرچہ ہمیشہ ہوئے مگر اب کے وہ برہمی ہے کہ ہم سے انہیں گلے بھی نہیں"""
-
-example_4 = """زحال مسکیں مکن تغافل دورائے نیناں بنائے بتیاں کہ تاب ہجراں ندارم اے جاں نہ لیہو کاہے لگائے چھتیاں شبان ہجراں دراز چوں زلف و روز وصلت چوں عمر کوتاہ سکھی پیا کو جو میں نہ دیکھوں تو کیسے کاٹوں اندھیری رتیاں یکایک از دل دو چشم جادو بصد فریبم بہ برد تسکیں کسے پڑی ہے جو جا سناوے پیارے پی کو ہماری بتیاں چوں شمع سوزاں چوں ذرہ حیراں ز مہر آں مہ بگشتم آخر نہ نیند نیناں نہ انگ چیناں نہ آپ آوے نہ بھیجے پتیاں بحق آں مہ کہ روز محشر بداد مارا فریب خسروؔ سپیت من کے دورائے راکھوں جو جائے پاؤں پیا کی کھتیاں"""
-
-example_5 = """گر خامشی سے فائدہ اخفائے حال ہے خوش ہوں کہ میری بات سمجھنی محال ہے کس کو سناؤں حسرت اظہار کا گلہ دل فرد جمع و خرچ زباں ہائے لال ہے کس پردہ میں ہے آئنہ پرداز اے خدا رحمت کہ عذر خواہ لب بے سوال ہے ہے ہے خدا نخواستہ وہ اور دشمنی اے شوق منفعل یہ تجھے کیا خیال ہے مشکیں لباس کعبہ علی کے قدم سے جان ناف زمین ہے نہ کہ ناف غزال ہے وحشت پہ میری عرصۂ آفاق تنگ تھا دریا زمین کو عرق انفعال ہے ہستی کے مت فریب میں آ جائیو اسدؔ عالم تمام حلقۂ دام خیال ہے پہلو تہی نہ کر غم و اندوہ سے اسدؔ دل وقف درد کر کہ فقیروں کا مال ہے"""
-
-# Create tabs for different app modes
-tab1, tab2 = st.tabs(["📜 Example Ghazals", "✍️ Custom Text"])
-
-with tab1:
-    st.markdown("### Select a ghazal to translate")
+# Define example texts
+examples = {
+    "Example 1": """دل نے وفا کے نام پر کار وفا نہیں کیا خود کو ہلاک کر لیا خود کو فدا نہیں کیا خیرہ سران شوق کا کوئی نہیں ہے جنبہ دار شہر میں اس گروہ نے کس کو خفا نہیں کیا جو بھی ہو تم پہ معترض اس کو یہی جواب دو آپ بہت شریف ہیں آپ نے کیا نہیں کیا نسبت علم ہے بہت حاکم وقت کو عزیز اس نے تو کار جہل بھی بے علما نہیں کیا جس کو بھی شیخ و شاہ نے حکم خدا دیا قرار ہم نے نہیں کیا وہ کام ہاں بہ خدا نہیں کیا""",
     
-    # Organize example buttons into a grid of cards
-    st.markdown('<div class="card-container">', unsafe_allow_html=True)
+    "Example 2": """گر خامشی سے فائدہ اخفائے حال ہے خوش ہوں کہ میری بات سمجھنی محال ہے کس کو سناؤں حسرت اظہار کا گلہ دل فرد جمع و خرچ زباں ہائے لال ہے کس پردہ میں ہے آئنہ پرداز اے خدا رحمت کہ عذر خواہ لب بے سوال ہے ہے ہے خدا نخواستہ وہ اور دشمنی اے شوق منفعل یہ تجھے کیا خیال ہے مشکیں لباس کعبہ علی کے قدم سے جان ناف زمین ہے نہ کہ ناف غزال ہے وحشت پہ میری عرصۂ آفاق تنگ تھا دریا زمین کو عرق انفعال ہے ہستی کے مت فریب میں آ جائیو اسدؔ عالم تمام حلقۂ دام خیال ہے پہلو تہی نہ کر غم و اندوہ سے اسدؔ دل وقف درد کر کہ فقیروں کا مال ہے""",
     
-    # Example 1 card
-    col1, col2, col3, col4, col5 = st.columns(5)
+    "Example 3": """بجا کہ آنکھ میں نیندوں کے سلسلے بھی نہیں شکست خواب کے اب مجھ میں حوصلے بھی نہیں نہیں نہیں یہ خبر دشمنوں نے دی ہوگی وہ آئے آ کے چلے بھی گئے ملے بھی نہیں یہ کون لوگ اندھیروں کی بات کرتے ہیں ابھی تو چاند تری یاد کے ڈھلے بھی نہیں ابھی سے میرے رفوگر کے ہاتھ تھکنے لگے ابھی تو چاک مرے زخم کے سلے بھی نہیں خفا اگرچہ ہمیشہ ہوئے مگر اب کے وہ برہمی ہے کہ ہم سے انہیں گلے بھی نہیں"""
+}
+
+# Create two columns for layout
+col1, col2 = st.columns([1, 3])
+
+with col1:
+    st.subheader("Examples")
+    for name, text in examples.items():
+        if st.button(name):
+            st.session_state.urdu_text = text
+
+    st.subheader("Translation Settings")
+    beam_width = st.slider("Beam Width", min_value=1, max_value=5, value=3, 
+                          help="Higher values may improve translation quality but take longer")
     
-    with col1:
-        st.markdown('<div class="example-btn-1">', unsafe_allow_html=True)
-        if st.button("Ghazal 1"):
-            st.session_state.selected_text = example_1
-            st.session_state.current_tab = "tab1"
-        st.markdown('</div>', unsafe_allow_html=True)
+    max_len = st.slider("Max Length", min_value=100, max_value=500, value=350,
+                       help="Maximum length of generated translation")
+
+
+with col2:
+    st.subheader("Input Text")
+    
+    # Check if there's a selected example, otherwise show input field
+    if "urdu_text" not in st.session_state:
+        st.session_state.urdu_text = ""
         
-    with col2:
-        st.markdown('<div class="example-btn-2">', unsafe_allow_html=True)
-        if st.button("Ghazal 2"):
-            st.session_state.selected_text = example_2
-            st.session_state.current_tab = "tab1"
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-    with col3:
-        st.markdown('<div class="example-btn-3">', unsafe_allow_html=True)
-        if st.button("Ghazal 3"):
-            st.session_state.selected_text = example_3
-            st.session_state.current_tab = "tab1"
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-    with col4:
-        st.markdown('<div class="example-btn-4">', unsafe_allow_html=True)
-        if st.button("Ghazal 4"):
-            st.session_state.selected_text = example_4
-            st.session_state.current_tab = "tab1"
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-    with col5:
-        st.markdown('<div class="example-btn-5">', unsafe_allow_html=True)
-        if st.button("Ghazal 5"):
-            st.session_state.selected_text = example_5
-            st.session_state.current_tab = "tab1"
-        st.markdown('</div>', unsafe_allow_html=True)
+    # Text area for input
+    urdu_text = st.text_area("Enter Urdu text:", 
+                            value=st.session_state.urdu_text,
+                            height=150)
     
-    st.markdown('</div>', unsafe_allow_html=True)
-
-with tab2:
-    st.markdown("### Enter your own Urdu text")
+    # Fixed beam width and max length
+    beam_width = 3  # Fixed beam width
+    max_len = 350  # Fixed max length
     
-    # Text area for custom input
-    custom_text = st.text_area(
-        "Type or paste Urdu text here:", 
-        height=150,
-        key="custom_text_input",
-        help="Enter Urdu text you'd like to translate to Roman Urdu"
-    )
-    
-    if st.button("Translate Custom Text", key="translate_custom"):
-        if custom_text:
-            st.session_state.selected_text = custom_text
-            st.session_state.current_tab = "tab2"
+    if st.button("Translate"):
+        if not urdu_text.strip():
+            st.warning("Please enter some Urdu text to translate.")
         else:
-            st.warning("Please enter some Urdu text first.")
-
-# Display selected text and translation
-if "selected_text" in st.session_state:
-    st.markdown("---")
-    
-    # Create columns for source and target
-    col_source, col_target = st.columns(2)
-    
-    with col_source:
-        st.markdown("### Original Urdu Text:")
-        st.markdown(f"""
-        <div style="background-color:#f8f9fa; padding:15px; border-radius:10px; border-left:5px solid #5c6bc0; 
-                     direction:rtl; text-align:right; font-family:'Jameel Noori Nastaleeq', Arial, sans-serif; font-size:18px;">
-            {st.session_state.selected_text}
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Load model if not already loaded
-    if "model_loaded" not in st.session_state:
-        with st.spinner("Loading translation model..."):
-            model, urdu_vocab_map, roman_vocab_map, urdu_merges = load_model()
-            if model:
-                st.session_state.model = model
-                st.session_state.urdu_vocab_map = urdu_vocab_map
-                st.session_state.roman_vocab_map = roman_vocab_map
-                st.session_state.urdu_merges = urdu_merges
-                st.session_state.model_loaded = True
-    
-    # Translate and display
-    with col_target:
-        st.markdown("### Roman Urdu Translation:")
-        
-        if "model_loaded" in st.session_state:
-            # Check if we've already translated this text
-            cache_key = f"trans_{st.session_state.selected_text[:20]}"
-            if cache_key not in st.session_state:
-                with st.spinner("Translating..."):
-                    translation = translate_text(
-                        st.session_state.selected_text,
-                        st.session_state.model,
-                        st.session_state.urdu_merges,
-                        st.session_state.urdu_vocab_map,
-                        st.session_state.roman_vocab_map
-                    )
-                    st.session_state[cache_key] = translation
-            else:
-                translation = st.session_state[cache_key]
+            # Display Urdu text
+            st.subheader("Original Urdu Text:")
+            st.markdown(f'<div class="translation-box urdu-text">{urdu_text}</div>', unsafe_allow_html=True)
             
-            # Display translation in styled box
-            st.markdown(f"""
-            <div style="background-color:#f8f9fa; padding:15px; border-radius:10px; border-left:5px solid #26a69a; 
-                      font-family:Arial, sans-serif; font-size:16px;">
-                {translation}
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.error("Error: Could not load the translation model.")
+            # Load model
+            with st.spinner("Loading model..."):
+                model, urdu_vocab_map, roman_vocab_map, urdu_merges = load_model()
+            
+            if model:
+                # Translate with beam search
+                with st.spinner("Translating using beam search..."):
+                    translation = translate_with_beam_search(
+                        urdu_text, model, urdu_merges, urdu_vocab_map, roman_vocab_map,
+                        beam_width=beam_width, max_len=max_len
+                    )
+                
+                # Display translation
+                st.subheader("Roman Urdu Translation:")
+                st.markdown(f'<div class="translation-box">{translation}</div>', unsafe_allow_html=True)
+            else:
+                st.error("Error: Could not load the translation model.")
 
-    # Add model information section
-    with st.expander("About the Translation Model"):
-        st.markdown("""
-        ### Model Architecture
-        This translator uses a Sequence-to-Sequence model with attention mechanism:
-        
-        - **Encoder**: Bidirectional LSTM with 1 layer
-        - **Decoder**: LSTM with 2 layers and Bahdanau attention
-        - **Embeddings**: 128-dimensional for both languages
-        - **Tokenization**: Specialized BPE with word boundary markers for Urdu
-        
-        ### Limitations
-        The current model has several limitations:
-        - Limited vocabulary coverage
-        - May struggle with complex poetic expressions
-        - Translation quality varies depending on input complexity
-        """)
-
-# Add footer with project information
 st.markdown("""
 <div class="footer">
     <p>Urdu to Roman Urdu Neural Machine Translation | Developed by Zeeshan Khalid & Zahid Iqbal</p>
-    <p>MS Data Science Project | Instructor: Dr. Muhammad Usama</p>
+    <p>NLP Course Project | Instructor: Dr. Muhammad Usama</p>
 </div>
 """, unsafe_allow_html=True)
+
