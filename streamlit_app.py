@@ -4,97 +4,49 @@ import torch.nn as nn
 import json
 import re
 import unicodedata
-import random
 
-# Set page title and configuration
-st.set_page_config(
-    page_title="Urdu-Roman Translator",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
-
-# Custom CSS for professional styling
+# Basic styling
 st.markdown("""
 <style>
-    /* Main container styling */
-    .main {
-        background-color: #ffffff;
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 1rem;
-    }
-    
-    /* Header styling */
-    h1, h2, h3 {
-        color: #1a237e;
-        margin-bottom: 1rem;
-    }
-    
-    /* Translation containers */
-    .translation-box {
-        background-color: #f5f7fa;
-        border-radius: 5px;
-        border-left: 3px solid #1a237e;
+    .urdu-text { 
+        direction: rtl; 
+        text-align: right; 
+        font-size: 18px;
+        font-family: 'Noto Nastaliq Urdu', serif;
+        background-color: #f8f9fa;
         padding: 15px;
+        border-radius: 5px;
         margin: 10px 0;
     }
-    
-    /* Button styling */
-    .stButton button {
-        background-color: #1a237e;
-        color: white;
-        border-radius: 4px;
-        border: none;
-        padding: 0.5rem 1rem;
-        font-weight: normal;
+    .translation-box {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 5px;
+        margin: 10px 0;
     }
-    
-    .stButton button:hover {
-        background-color: #3949ab;
-    }
-    
-    /* Footer styling */
     .footer {
-        margin-top: 2rem;
+        margin-top: 20px;
         text-align: center;
+        font-size: 12px;
         color: #666;
-        font-size: 0.8rem;
-        border-top: 1px solid #eee;
-        padding-top: 1rem;
     }
-    
-    /* Urdu text styling */
-    .urdu-text {
-        font-family: 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', serif;
-        font-size: 1.2rem;
-        line-height: 2;
-        text-align: right;
-        direction: rtl;
+    .stButton button {
+        width: 100%;
     }
-    
-    /* Remove Streamlit default elements */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    .reportview-container .main footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
-# Model architecture (unchanged)
+st.title("Urdu to Roman Urdu Translator")
+
+# Model architecture
 class Encoder(nn.Module):
     def __init__(self, input_size, embed_size, hidden_size, num_layers=1, dropout=0.1):
         super(Encoder, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-
         self.embedding = nn.Embedding(input_size, embed_size)
-        self.lstm = nn.LSTM(
-            embed_size,
-            hidden_size,
-            num_layers=num_layers,
-            bidirectional=True,
-            dropout=dropout if num_layers > 1 else 0,
-            batch_first=True
-        )
+        self.lstm = nn.LSTM(embed_size, hidden_size, num_layers=num_layers, bidirectional=True, 
+                          dropout=dropout if num_layers > 1 else 0, batch_first=True)
         self.fc_hidden = nn.Linear(hidden_size * 2, hidden_size)
         self.fc_cell = nn.Linear(hidden_size * 2, hidden_size)
         self.dropout = nn.Dropout(dropout)
@@ -141,23 +93,15 @@ class AttentionDecoder(nn.Module):
         self.output_size = output_size
         self.hidden_size = dec_hidden_size
         self.num_layers = num_layers
-
         self.embedding = nn.Embedding(output_size, embed_size)
         self.attention = Attention(enc_hidden_size, dec_hidden_size)
-        
-        self.lstm = nn.LSTM(
-            embed_size + (enc_hidden_size * 2),
-            dec_hidden_size,
-            num_layers=num_layers,
-            dropout=dropout if num_layers > 1 else 0,
-            batch_first=True
-        )
-        
+        self.lstm = nn.LSTM(embed_size + (enc_hidden_size * 2), dec_hidden_size,
+                          num_layers=num_layers, dropout=dropout if num_layers > 1 else 0,
+                          batch_first=True)
         self.fc_out = nn.Linear(dec_hidden_size + embed_size + (enc_hidden_size * 2), output_size)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, input, hidden, cell, encoder_outputs):
-        # Handle input dimensions
         if input.dim() > 1:
             input = input.squeeze(-1)
         
@@ -188,7 +132,7 @@ class Seq2Seq(nn.Module):
         self.decoder = decoder
         self.device = device
 
-    def beam_search(self, src, beam_width=3, max_len=100):
+    def beam_search(self, src, beam_width=3, max_len=350):
         """Generate translations using beam search for better results."""
         batch_size = src.shape[0]
         sos_idx = 0  # Start token
@@ -204,7 +148,7 @@ class Seq2Seq(nn.Module):
         # Initialize beam
         # Each beam contains: (cumulative_score, sequence, current_input, hidden, cell, token_history)
         beams = [(0, [sos_idx], torch.tensor([sos_idx], device=src.device), 
-                  hidden, cell, set())]
+                 hidden, cell, set())]
         completed_beams = []
 
         # Beam search
@@ -274,44 +218,6 @@ class Seq2Seq(nn.Module):
 
         return output
 
-    def translate(self, src, max_len=350):
-        """Simple greedy decoding"""
-        batch_size = src.shape[0]
-        sos_token = 0  # Start token index
-        eos_token = 2  # End token index
-        
-        # Initialize output tensor
-        outputs = torch.zeros(batch_size, max_len, dtype=torch.long, device=src.device)
-        outputs[:, 0] = sos_token
-        
-        # Encode the source
-        encoder_outputs, hidden, cell = self.encoder(src)
-        
-        # Prepare decoder hidden state
-        hidden = hidden.unsqueeze(0).repeat(self.decoder.num_layers, 1, 1)
-        cell = cell.unsqueeze(0).repeat(self.decoder.num_layers, 1, 1)
-        
-        # Start with SOS token
-        current_token = torch.tensor([sos_token], device=src.device)
-        
-        # Decode one token at a time
-        for t in range(1, max_len):
-            # Get output from decoder
-            output, hidden, cell, _ = self.decoder(current_token, hidden, cell, encoder_outputs)
-            
-            # Get most likely next token
-            current_token = output.argmax(1)
-            
-            # Save to output tensor
-            outputs[:, t] = current_token
-            
-            # Stop if EOS token
-            if current_token.item() == eos_token:
-                break
-        
-        return outputs
-
-# Helper function to load model
 @st.cache_resource
 def load_model():
     try:
@@ -349,7 +255,6 @@ def load_model():
         elif isinstance(model_data, dict):
             model.load_state_dict(model_data)
         else:
-            # If model is already a model object, not a state dict
             model = model_data
             
         model.eval()
@@ -357,13 +262,9 @@ def load_model():
         return model, urdu_vocab_map, roman_vocab_map, urdu_merges
     except Exception as e:
         st.error(f"Error loading model: {str(e)}")
-        import traceback
-        st.error(traceback.format_exc())
         return None, None, None, None
 
-# Helper functions
 def merge_pair(tokens, pair, new_token):
-    """Merge a specific pair in a sequence."""
     result = []
     i = 0
     while i < len(tokens):
@@ -376,7 +277,6 @@ def merge_pair(tokens, pair, new_token):
     return result
 
 def tokenize_urdu(text, urdu_merges, urdu_vocab_map):
-    """Tokenize Urdu text with word boundary markers."""
     # Clean text
     text = unicodedata.normalize('NFC', text)
     text = re.sub(r'[^\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\u0900-\u097F\s\n]', '', text)
@@ -400,14 +300,17 @@ def tokenize_urdu(text, urdu_merges, urdu_vocab_map):
     
     return tokens, indices
 
-def translate_with_beam_search(text, model, urdu_merges, urdu_vocab_map, roman_vocab_map, beam_width=3, max_len=350):
-    """Translate Urdu text to Roman Urdu using beam search."""
+def translate_with_beam_search(text, model, urdu_merges, urdu_vocab_map, roman_vocab_map):
     try:
         # Tokenize
         _, indices = tokenize_urdu(text, urdu_merges, urdu_vocab_map)
         
         # Convert to tensor
         src_tensor = torch.tensor([indices], dtype=torch.long)
+        
+        # Fixed parameters
+        beam_width = 3
+        max_len = 350
         
         # Translate with beam search
         with torch.no_grad():
@@ -428,54 +331,44 @@ def translate_with_beam_search(text, model, urdu_merges, urdu_vocab_map, roman_v
         roman_text = ''.join(translation).replace('_', ' ')
         return roman_text
     except Exception as e:
-        import traceback
         return f"Translation error: {str(e)}"
 
-# Main application header
-st.title("Urdu to Roman Urdu Translator")
-st.write("Neural machine translation using sequence-to-sequence model with attention mechanism")
+# Example ghazals
+example_1 = """دل نے وفا کے نام پر کار وفا نہیں کیا خود کو ہلاک کر لیا خود کو فدا نہیں کیا خیرہ سران شوق کا کوئی نہیں ہے جنبہ دار شہر میں اس گروہ نے کس کو خفا نہیں کیا جو بھی ہو تم پہ معترض اس کو یہی جواب دو آپ بہت شریف ہیں آپ نے کیا نہیں کیا نسبت علم ہے بہت حاکم وقت کو عزیز اس نے تو کار جہل بھی بے علما نہیں کیا جس کو بھی شیخ و شاہ نے حکم خدا دیا قرار ہم نے نہیں کیا وہ کام ہاں بہ خدا نہیں کیا"""
 
-# Define example texts
-examples = {
-    "Example 1": """دل نے وفا کے نام پر کار وفا نہیں کیا خود کو ہلاک کر لیا خود کو فدا نہیں کیا خیرہ سران شوق کا کوئی نہیں ہے جنبہ دار شہر میں اس گروہ نے کس کو خفا نہیں کیا جو بھی ہو تم پہ معترض اس کو یہی جواب دو آپ بہت شریف ہیں آپ نے کیا نہیں کیا نسبت علم ہے بہت حاکم وقت کو عزیز اس نے تو کار جہل بھی بے علما نہیں کیا جس کو بھی شیخ و شاہ نے حکم خدا دیا قرار ہم نے نہیں کیا وہ کام ہاں بہ خدا نہیں کیا""",
-    
-    "Example 2": """گر خامشی سے فائدہ اخفائے حال ہے خوش ہوں کہ میری بات سمجھنی محال ہے کس کو سناؤں حسرت اظہار کا گلہ دل فرد جمع و خرچ زباں ہائے لال ہے کس پردہ میں ہے آئنہ پرداز اے خدا رحمت کہ عذر خواہ لب بے سوال ہے ہے ہے خدا نخواستہ وہ اور دشمنی اے شوق منفعل یہ تجھے کیا خیال ہے مشکیں لباس کعبہ علی کے قدم سے جان ناف زمین ہے نہ کہ ناف غزال ہے وحشت پہ میری عرصۂ آفاق تنگ تھا دریا زمین کو عرق انفعال ہے ہستی کے مت فریب میں آ جائیو اسدؔ عالم تمام حلقۂ دام خیال ہے پہلو تہی نہ کر غم و اندوہ سے اسدؔ دل وقف درد کر کہ فقیروں کا مال ہے""",
-    
-    "Example 3": """بجا کہ آنکھ میں نیندوں کے سلسلے بھی نہیں شکست خواب کے اب مجھ میں حوصلے بھی نہیں نہیں نہیں یہ خبر دشمنوں نے دی ہوگی وہ آئے آ کے چلے بھی گئے ملے بھی نہیں یہ کون لوگ اندھیروں کی بات کرتے ہیں ابھی تو چاند تری یاد کے ڈھلے بھی نہیں ابھی سے میرے رفوگر کے ہاتھ تھکنے لگے ابھی تو چاک مرے زخم کے سلے بھی نہیں خفا اگرچہ ہمیشہ ہوئے مگر اب کے وہ برہمی ہے کہ ہم سے انہیں گلے بھی نہیں"""
-}
+example_2 = """دیا سا دل کے خرابے میں جل رہا ہے میاں دیے کے گرد کوئی عکس چل رہا ہے میاں یہ روح رقص چراغاں ہے اپنے حلقے میں یہ جسم سایہ ہے اور سایہ ڈھل رہا میاں یہ آنکھ پردہ ہے اک گردش تحیر کا یہ دل نہیں ہے بگولہ اچھل رہا ہے میاں کبھی کسی کا گزرنا کبھی ٹھہر جانا مرے سکوت میں کیا کیا خلل رہا ہے میاں کسی کی راہ میں افلاک زیر پا ہوتے یہاں تو پاؤں سے صحرا نکل رہا ہے میاں ہجوم شوخ میں یہ دل ہی بے غرض نکلا چلو کوئی تو حریفانہ چل رہا ہے میاں تجھے ابھی سے پڑی ہے کہ فیصلہ ہو جائے نہ جانے کب سے یہاں وقت ٹل رہا ہے میاں طبیعتوں ہی کے ملنے سے تھا مزہ باقی سو وہ مزہ بھی کہاں آج کل رہا ہے میاں غموں کی فصل میں جس غم کو رائیگاں سمجھیں خوشی تو یہ ہے کہ وہ غم بھی پھل رہا ہے میاں لکھا نصیرؔ نے ہر رنگ میں سفید و"""
 
-# Create two columns for layout
+example_3 = """بجا کہ آنکھ میں نیندوں کے سلسلے بھی نہیں شکست خواب کے اب مجھ میں حوصلے بھی نہیں نہیں نہیں یہ خبر دشمنوں نے دی ہوگی وہ آئے آ کے چلے بھی گئے ملے بھی نہیں یہ کون لوگ اندھیروں کی بات کرتے ہیں ابھی تو چاند تری یاد کے ڈھلے بھی نہیں ابھی سے میرے رفوگر کے ہاتھ تھکنے لگے ابھی تو چاک مرے زخم کے سلے بھی نہیں خفا اگرچہ ہمیشہ ہوئے مگر اب کے وہ برہمی ہے کہ ہم سے انہیں گلے بھی نہیں"""
+
+example_4 = """زحال مسکیں مکن تغافل دورائے نیناں بنائے بتیاں کہ تاب ہجراں ندارم اے جاں نہ لیہو کاہے لگائے چھتیاں شبان ہجراں دراز چوں زلف و روز وصلت چوں عمر کوتاہ سکھی پیا کو جو میں نہ دیکھوں تو کیسے کاٹوں اندھیری رتیاں یکایک از دل دو چشم جادو بصد فریبم بہ برد تسکیں کسے پڑی ہے جو جا سناوے پیارے پی کو ہماری بتیاں چوں شمع سوزاں چوں ذرہ حیراں ز مہر آں مہ بگشتم آخر نہ نیند نیناں نہ انگ چیناں نہ آپ آوے نہ بھیجے پتیاں بحق آں مہ کہ روز محشر بداد مارا فریب خسروؔ سپیت من کے دورائے راکھوں جو جائے پاؤں پیا کی کھتیاں"""
+
+example_5 = """گر خامشی سے فائدہ اخفائے حال ہے خوش ہوں کہ میری بات سمجھنی محال ہے کس کو سناؤں حسرت اظہار کا گلہ دل فرد جمع و خرچ زباں ہائے لال ہے کس پردہ میں ہے آئنہ پرداز اے خدا رحمت کہ عذر خواہ لب بے سوال ہے ہے ہے خدا نخواستہ وہ اور دشمنی اے شوق منفعل یہ تجھے کیا خیال ہے مشکیں لباس کعبہ علی کے قدم سے جان ناف زمین ہے نہ کہ ناف غزال ہے وحشت پہ میری عرصۂ آفاق تنگ تھا دریا زمین کو عرق انفعال ہے ہستی کے مت فریب میں آ جائیو اسدؔ عالم تمام حلقۂ دام خیال ہے پہلو تہی نہ کر غم و اندوہ سے اسدؔ دل وقف درد کر کہ فقیروں کا مال ہے"""
+
+# Layout
 col1, col2 = st.columns([1, 3])
 
 with col1:
     st.subheader("Examples")
-    for name, text in examples.items():
-        if st.button(name):
-            st.session_state.urdu_text = text
-
-    st.subheader("Translation Settings")
-    beam_width = st.slider("Beam Width", min_value=1, max_value=5, value=3, 
-                          help="Higher values may improve translation quality but take longer")
-    
-    max_len = st.slider("Max Length", min_value=100, max_value=500, value=350,
-                       help="Maximum length of generated translation")
-
+    if st.button("Example 1"):
+        st.session_state.urdu_text = example_1
+    if st.button("Example 2"):
+        st.session_state.urdu_text = example_2
+    if st.button("Example 3"):
+        st.session_state.urdu_text = example_3
+    if st.button("Example 4"):
+        st.session_state.urdu_text = example_4
+    if st.button("Example 5"):
+        st.session_state.urdu_text = example_5
 
 with col2:
     st.subheader("Input Text")
     
-    # Check if there's a selected example, otherwise show input field
+    # Check if there's a selected example, otherwise show empty input field
     if "urdu_text" not in st.session_state:
         st.session_state.urdu_text = ""
         
     # Text area for input
-    urdu_text = st.text_area("Enter Urdu text:", 
-                            value=st.session_state.urdu_text,
-                            height=150)
-    
-    # Fixed beam width and max length
-    beam_width = 3  # Fixed beam width
-    max_len = 350  # Fixed max length
+    urdu_text = st.text_area("Enter Urdu text:", value=st.session_state.urdu_text, height=150)
     
     if st.button("Translate"):
         if not urdu_text.strip():
@@ -483,7 +376,7 @@ with col2:
         else:
             # Display Urdu text
             st.subheader("Original Urdu Text:")
-            st.markdown(f'<div class="translation-box urdu-text">{urdu_text}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="urdu-text">{urdu_text}</div>', unsafe_allow_html=True)
             
             # Load model
             with st.spinner("Loading model..."):
@@ -491,10 +384,9 @@ with col2:
             
             if model:
                 # Translate with beam search
-                with st.spinner("Translating using beam search..."):
+                with st.spinner("Translating..."):
                     translation = translate_with_beam_search(
-                        urdu_text, model, urdu_merges, urdu_vocab_map, roman_vocab_map,
-                        beam_width=beam_width, max_len=max_len
+                        urdu_text, model, urdu_merges, urdu_vocab_map, roman_vocab_map
                     )
                 
                 # Display translation
@@ -503,10 +395,10 @@ with col2:
             else:
                 st.error("Error: Could not load the translation model.")
 
+# Footer
 st.markdown("""
 <div class="footer">
-    <p>Urdu to Roman Urdu Neural Machine Translation | Developed by Zeeshan Khalid & Zahid Iqbal</p>
-    <p>NLP Course Project | Instructor: Dr. Muhammad Usama</p>
+    <p>Urdu to Roman Urdu Neural Machine Translation | Developed by Zeeshan Khalid & Zahid Aslam</p>
+    <p>NLP  Project 1 | Instructor: Dr. Muhammad Usama</p>
 </div>
 """, unsafe_allow_html=True)
-
