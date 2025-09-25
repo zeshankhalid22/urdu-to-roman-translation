@@ -5,48 +5,26 @@ import json
 import re
 import unicodedata
 
-# Basic styling
-st.markdown("""
-<style>
-    .urdu-text { 
-        direction: rtl; 
-        text-align: right; 
-        font-size: 18px;
-        font-family: 'Noto Nastaliq Urdu', serif;
-        background-color: #f8f9fa;
-        padding: 15px;
-        border-radius: 5px;
-        margin: 10px 0;
-    }
-    .translation-box {
-        background-color: #f8f9fa;
-        padding: 15px;
-        border-radius: 5px;
-        margin: 10px 0;
-    }
-    .footer {
-        margin-top: 20px;
-        text-align: center;
-        font-size: 12px;
-        color: #666;
-    }
-    .stButton button {
-        width: 100%;
-    }
-</style>
-""", unsafe_allow_html=True)
+# Set page title and configuration
+st.set_page_config(page_title="Urdu-Roman Translator", layout="centered")
+st.title("Urdu to Roman Urdu Translation")
 
-st.title("Urdu to Roman Urdu Translator")
-
-# Model architecture
+# Define your model architecture based on the parameters you provided
 class Encoder(nn.Module):
     def __init__(self, input_size, embed_size, hidden_size, num_layers=1, dropout=0.1):
         super(Encoder, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
+
         self.embedding = nn.Embedding(input_size, embed_size)
-        self.lstm = nn.LSTM(embed_size, hidden_size, num_layers=num_layers, bidirectional=True, 
-                          dropout=dropout if num_layers > 1 else 0, batch_first=True)
+        self.lstm = nn.LSTM(
+            embed_size,
+            hidden_size,
+            num_layers=num_layers,
+            bidirectional=True,
+            dropout=dropout if num_layers > 1 else 0,
+            batch_first=True
+        )
         self.fc_hidden = nn.Linear(hidden_size * 2, hidden_size)
         self.fc_cell = nn.Linear(hidden_size * 2, hidden_size)
         self.dropout = nn.Dropout(dropout)
@@ -93,15 +71,23 @@ class AttentionDecoder(nn.Module):
         self.output_size = output_size
         self.hidden_size = dec_hidden_size
         self.num_layers = num_layers
+
         self.embedding = nn.Embedding(output_size, embed_size)
         self.attention = Attention(enc_hidden_size, dec_hidden_size)
-        self.lstm = nn.LSTM(embed_size + (enc_hidden_size * 2), dec_hidden_size,
-                          num_layers=num_layers, dropout=dropout if num_layers > 1 else 0,
-                          batch_first=True)
+        
+        self.lstm = nn.LSTM(
+            embed_size + (enc_hidden_size * 2),
+            dec_hidden_size,
+            num_layers=num_layers,
+            dropout=dropout if num_layers > 1 else 0,
+            batch_first=True
+        )
+        
         self.fc_out = nn.Linear(dec_hidden_size + embed_size + (enc_hidden_size * 2), output_size)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, input, hidden, cell, encoder_outputs):
+        # Handle input dimensions
         if input.dim() > 1:
             input = input.squeeze(-1)
         
@@ -132,92 +118,48 @@ class Seq2Seq(nn.Module):
         self.decoder = decoder
         self.device = device
 
-    def beam_search(self, src, beam_width=3, max_len=350):
-        """Generate translations using beam search for better results."""
+    def forward(self, src, tgt, teacher_forcing_ratio=0.5):
+        # Not used for inference
+        pass
+
+    def translate(self, src, max_len=350):
+        """Simple greedy decoding"""
         batch_size = src.shape[0]
-        sos_idx = 0  # Start token
-        eos_idx = 2  # End token
-
-        # Encode the source sequence
+        sos_token = 0  # Start token index
+        eos_token = 2  # End token index
+        
+        # Initialize output tensor
+        outputs = torch.zeros(batch_size, max_len, dtype=torch.long, device=src.device)
+        outputs[:, 0] = sos_token
+        
+        # Encode the source
         encoder_outputs, hidden, cell = self.encoder(src)
-
-        # Prepare decoder states
+        
+        # Prepare decoder hidden state
         hidden = hidden.unsqueeze(0).repeat(self.decoder.num_layers, 1, 1)
         cell = cell.unsqueeze(0).repeat(self.decoder.num_layers, 1, 1)
-
-        # Initialize beam
-        # Each beam contains: (cumulative_score, sequence, current_input, hidden, cell, token_history)
-        beams = [(0, [sos_idx], torch.tensor([sos_idx], device=src.device), 
-                 hidden, cell, set())]
-        completed_beams = []
-
-        # Beam search
-        for _ in range(max_len):
-            candidates = []
-
-            for score, seq, inp, h, c, history in beams:
-                # If sequence ends with EOS, add to completed
-                if seq[-1] == eos_idx:
-                    completed_beams.append((score, seq))
-                    continue
-
-                # Pass through decoder with attention
-                output, new_h, new_c, _ = self.decoder(inp, h, c, encoder_outputs)
-
-                # Get top-k probabilities and tokens
-                log_probs, top_indices = output.log_softmax(1).topk(beam_width)
-
-                # Create new candidates
-                for i in range(beam_width):
-                    token = top_indices[0, i].item()
-                    log_prob = log_probs[0, i].item()
-
-                    # Apply repetition penalty
-                    rep_penalty = 1.0
-                    if token in history:
-                        rep_penalty = 0.7  # Reduce probability of repetition
-
-                    # Create new sequence
-                    new_seq = seq + [token]
-                    new_score = score + log_prob * rep_penalty
-                    new_input = torch.tensor([token], device=src.device)
-
-                    # Add to history (keep recent history)
-                    new_history = history.copy()
-                    if len(new_history) > 5:
-                        new_history.pop()
-                    new_history.add(token)
-
-                    candidates.append((new_score, new_seq, new_input, new_h, new_c, new_history))
-
-                    # If token is EOS, also add to completed
-                    if token == eos_idx:
-                        completed_beams.append((new_score, new_seq))
-
-            # Keep only top beam_width candidates
-            beams = sorted(candidates, key=lambda x: x[0], reverse=True)[:beam_width]
-
-            # Early stop if all beams have completed
-            if len(beams) == 0:
+        
+        # Start with SOS token
+        current_token = torch.tensor([sos_token], device=src.device)
+        
+        # Decode one token at a time
+        for t in range(1, max_len):
+            # Get output from decoder
+            output, hidden, cell, _ = self.decoder(current_token, hidden, cell, encoder_outputs)
+            
+            # Get most likely next token
+            current_token = output.argmax(1)
+            
+            # Save to output tensor
+            outputs[:, t] = current_token
+            
+            # Stop if EOS token
+            if current_token.item() == eos_token:
                 break
+        
+        return outputs
 
-        # If no complete sequences found, use best incomplete one
-        if not completed_beams and beams:
-            completed_beams = [(beams[0][0], beams[0][1])]
-
-        # Sort completed beams by score
-        completed_beams = sorted(completed_beams, key=lambda x: x[0], reverse=True)
-
-        # Return the best beam
-        best_seq = completed_beams[0][1] if completed_beams else [sos_idx]
-
-        # Create output tensor
-        output = torch.zeros(1, max_len, dtype=torch.long, device=src.device)
-        for i, token in enumerate(best_seq[:max_len]):
-            output[0, i] = token
-
-        return output
-
+# Helper function to load model
 @st.cache_resource
 def load_model():
     try:
@@ -255,6 +197,7 @@ def load_model():
         elif isinstance(model_data, dict):
             model.load_state_dict(model_data)
         else:
+            # If model is already a model object, not a state dict
             model = model_data
             
         model.eval()
@@ -262,9 +205,13 @@ def load_model():
         return model, urdu_vocab_map, roman_vocab_map, urdu_merges
     except Exception as e:
         st.error(f"Error loading model: {str(e)}")
+        import traceback
+        st.error(traceback.format_exc())
         return None, None, None, None
 
+# Helper functions
 def merge_pair(tokens, pair, new_token):
+    """Merge a specific pair in a sequence."""
     result = []
     i = 0
     while i < len(tokens):
@@ -277,6 +224,7 @@ def merge_pair(tokens, pair, new_token):
     return result
 
 def tokenize_urdu(text, urdu_merges, urdu_vocab_map):
+    """Tokenize Urdu text with word boundary markers."""
     # Clean text
     text = unicodedata.normalize('NFC', text)
     text = re.sub(r'[^\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\u0900-\u097F\s\n]', '', text)
@@ -300,7 +248,8 @@ def tokenize_urdu(text, urdu_merges, urdu_vocab_map):
     
     return tokens, indices
 
-def translate_with_beam_search(text, model, urdu_merges, urdu_vocab_map, roman_vocab_map):
+def translate_text(text, model, urdu_merges, urdu_vocab_map, roman_vocab_map):
+    """Translate Urdu text to Roman Urdu."""
     try:
         # Tokenize
         _, indices = tokenize_urdu(text, urdu_merges, urdu_vocab_map)
@@ -308,13 +257,9 @@ def translate_with_beam_search(text, model, urdu_merges, urdu_vocab_map, roman_v
         # Convert to tensor
         src_tensor = torch.tensor([indices], dtype=torch.long)
         
-        # Fixed parameters
-        beam_width = 3
-        max_len = 350
-        
-        # Translate with beam search
+        # Translate
         with torch.no_grad():
-            output = model.beam_search(src_tensor, beam_width=beam_width, max_len=max_len)
+            output = model.translate(src_tensor)
             
         # Convert output indices to text
         translation = []
@@ -331,9 +276,10 @@ def translate_with_beam_search(text, model, urdu_merges, urdu_vocab_map, roman_v
         roman_text = ''.join(translation).replace('_', ' ')
         return roman_text
     except Exception as e:
-        return f"Translation error: {str(e)}"
+        import traceback
+        return f"Translation error: {str(e)}\n{traceback.format_exc()}"
 
-# Example ghazals
+
 example_1 = """دل نے وفا کے نام پر کار وفا نہیں کیا خود کو ہلاک کر لیا خود کو فدا نہیں کیا خیرہ سران شوق کا کوئی نہیں ہے جنبہ دار شہر میں اس گروہ نے کس کو خفا نہیں کیا جو بھی ہو تم پہ معترض اس کو یہی جواب دو آپ بہت شریف ہیں آپ نے کیا نہیں کیا نسبت علم ہے بہت حاکم وقت کو عزیز اس نے تو کار جہل بھی بے علما نہیں کیا جس کو بھی شیخ و شاہ نے حکم خدا دیا قرار ہم نے نہیں کیا وہ کام ہاں بہ خدا نہیں کیا"""
 
 example_2 = """دیا سا دل کے خرابے میں جل رہا ہے میاں دیے کے گرد کوئی عکس چل رہا ہے میاں یہ روح رقص چراغاں ہے اپنے حلقے میں یہ جسم سایہ ہے اور سایہ ڈھل رہا میاں یہ آنکھ پردہ ہے اک گردش تحیر کا یہ دل نہیں ہے بگولہ اچھل رہا ہے میاں کبھی کسی کا گزرنا کبھی ٹھہر جانا مرے سکوت میں کیا کیا خلل رہا ہے میاں کسی کی راہ میں افلاک زیر پا ہوتے یہاں تو پاؤں سے صحرا نکل رہا ہے میاں ہجوم شوخ میں یہ دل ہی بے غرض نکلا چلو کوئی تو حریفانہ چل رہا ہے میاں تجھے ابھی سے پڑی ہے کہ فیصلہ ہو جائے نہ جانے کب سے یہاں وقت ٹل رہا ہے میاں طبیعتوں ہی کے ملنے سے تھا مزہ باقی سو وہ مزہ بھی کہاں آج کل رہا ہے میاں غموں کی فصل میں جس غم کو رائیگاں سمجھیں خوشی تو یہ ہے کہ وہ غم بھی پھل رہا ہے میاں لکھا نصیرؔ نے ہر رنگ میں سفید و"""
@@ -344,61 +290,66 @@ example_4 = """زحال مسکیں مکن تغافل دورائے نیناں ب�
 
 example_5 = """گر خامشی سے فائدہ اخفائے حال ہے خوش ہوں کہ میری بات سمجھنی محال ہے کس کو سناؤں حسرت اظہار کا گلہ دل فرد جمع و خرچ زباں ہائے لال ہے کس پردہ میں ہے آئنہ پرداز اے خدا رحمت کہ عذر خواہ لب بے سوال ہے ہے ہے خدا نخواستہ وہ اور دشمنی اے شوق منفعل یہ تجھے کیا خیال ہے مشکیں لباس کعبہ علی کے قدم سے جان ناف زمین ہے نہ کہ ناف غزال ہے وحشت پہ میری عرصۂ آفاق تنگ تھا دریا زمین کو عرق انفعال ہے ہستی کے مت فریب میں آ جائیو اسدؔ عالم تمام حلقۂ دام خیال ہے پہلو تہی نہ کر غم و اندوہ سے اسدؔ دل وقف درد کر کہ فقیروں کا مال ہے"""
 
-# Layout
-col1, col2 = st.columns([1, 3])
+# Create columns for buttons
+col1, col2, col3, col4, col5 = st.columns(5)
 
 with col1:
-    st.subheader("Examples")
     if st.button("Example 1"):
-        st.session_state.urdu_text = example_1
-    if st.button("Example 2"):
-        st.session_state.urdu_text = example_2
-    if st.button("Example 3"):
-        st.session_state.urdu_text = example_3
-    if st.button("Example 4"):
-        st.session_state.urdu_text = example_4
-    if st.button("Example 5"):
-        st.session_state.urdu_text = example_5
+        st.session_state.selected_text = example_1
 
 with col2:
-    st.subheader("Input Text")
-    
-    # Check if there's a selected example, otherwise show empty input field
-    if "urdu_text" not in st.session_state:
-        st.session_state.urdu_text = ""
-        
-    # Text area for input
-    urdu_text = st.text_area("Enter Urdu text:", value=st.session_state.urdu_text, height=150)
-    
-    if st.button("Translate"):
-        if not urdu_text.strip():
-            st.warning("Please enter some Urdu text to translate.")
-        else:
-            # Display Urdu text
-            st.subheader("Original Urdu Text:")
-            st.markdown(f'<div class="urdu-text">{urdu_text}</div>', unsafe_allow_html=True)
-            
-            # Load model
-            with st.spinner("Loading model..."):
-                model, urdu_vocab_map, roman_vocab_map, urdu_merges = load_model()
-            
-            if model:
-                # Translate with beam search
-                with st.spinner("Translating..."):
-                    translation = translate_with_beam_search(
-                        urdu_text, model, urdu_merges, urdu_vocab_map, roman_vocab_map
-                    )
-                
-                # Display translation
-                st.subheader("Roman Urdu Translation:")
-                st.markdown(f'<div class="translation-box">{translation}</div>', unsafe_allow_html=True)
-            else:
-                st.error("Error: Could not load the translation model.")
+    if st.button("Example 2"):
+        st.session_state.selected_text = example_2
 
-# Footer
+with col3:
+    if st.button("Example 3"):
+        st.session_state.selected_text = example_4
+with col4:
+    if st.button("Example 2"):
+        st.session_state.selected_text = example_2
+
+with col5:
+    if st.button("Example 3"):
+        st.session_state.selected_text = example_5
+
+# Display selected text and translation
+if "selected_text" in st.session_state:
+    # Display selected Urdu text
+    st.subheader("Urdu Text:")
+    st.write(st.session_state.selected_text)
+    
+    # Load model if not already loaded
+    if "model_loaded" not in st.session_state:
+        with st.spinner("Loading model..."):
+            model, urdu_vocab_map, roman_vocab_map, urdu_merges = load_model()
+            if model:
+                st.session_state.model = model
+                st.session_state.urdu_vocab_map = urdu_vocab_map
+                st.session_state.roman_vocab_map = roman_vocab_map
+                st.session_state.urdu_merges = urdu_merges
+                st.session_state.model_loaded = True
+    
+    # Translate and display
+    if "model_loaded" in st.session_state:
+        with st.spinner("Translating..."):
+            translation = translate_text(
+                st.session_state.selected_text,
+                st.session_state.model,
+                st.session_state.urdu_merges,
+                st.session_state.urdu_vocab_map,
+                st.session_state.roman_vocab_map
+            )
+        
+        # Display translation
+        st.subheader("Roman Urdu Translation:")
+        st.write(translation)
+else:
+    st.write("Click on any example button to see the translation.")
+
 st.markdown("""
 <div class="footer">
-    <p>Urdu to Roman Urdu Neural Machine Translation | Developed by Zeeshan Khalid & Zahid Aslam</p>
-    <p>NLP  Project 1 | Instructor: Dr. Muhammad Usama</p>
+    <p>Urdu to Roman Urdu Neural Machine Translation | Developed by Zeeshan Khalid & Zahid Iqbal</p>
+    <p>NLP Course Project | Instructor: Dr. Muhammad Usama</p>
 </div>
 """, unsafe_allow_html=True)
+
