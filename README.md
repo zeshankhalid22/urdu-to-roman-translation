@@ -5,7 +5,7 @@ This repository contains our implementation of a Neural Machine Translation (NMT
 ## Team Members
 
 - Zeeshan Khalid (22P-9230)
-- Zahid Iqbal (22F-3394)
+- Zahid Asalm (22F-3394)
 
 ## Project Overview
 
