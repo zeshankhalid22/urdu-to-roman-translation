@@ -346,10 +346,3 @@ if "selected_text" in st.session_state:
 else:
     st.write("Click on any example button to see the translation.")
 
-st.markdown("""
-<div class="footer">
-    <p>Urdu to Roman Urdu Neural Machine Translation | Developed by Zeeshan Khalid & Zahid Iqbal</p>
-    <p>NLP Course Project | Instructor: Dr. Muhammad Usama</p>
-</div>
-""", unsafe_allow_html=True)
-
