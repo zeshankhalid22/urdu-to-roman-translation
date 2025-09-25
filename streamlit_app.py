@@ -4,12 +4,162 @@ import torch.nn as nn
 import json
 import re
 import unicodedata
+from PIL import Image
+import base64
 
-# Set page title and configuration
-st.set_page_config(page_title="Urdu-Roman Translator", layout="centered")
-st.title("Urdu to Roman Urdu Translation")
+# Page configuration with custom theme
+st.set_page_config(
+    page_title="Urdu to Roman Urdu Translator",
+    page_icon="🔤",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
 
-# Define your model architecture based on the parameters you provided
+# Custom CSS for styling
+def add_custom_css():
+    st.markdown("""
+    <style>
+        /* Main page styling */
+        .main {
+            background-color: #f7f7f7;
+            padding: 20px;
+        }
+        
+        /* Header styling */
+        .header-container {
+            background-color: #f0f2f6;
+            padding: 1.5rem;
+            border-radius: 10px;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        /* Text areas */
+        .stTextArea textarea {
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            padding: 10px;
+            font-size: 16px;
+            font-family: 'Jameel Noori Nastaleeq', Arial, sans-serif;
+        }
+        
+        /* Translation result container */
+        .result-container {
+            background-color: #f0f2f6;
+            padding: 1.5rem;
+            border-radius: 10px;
+            margin-top: 1rem;
+            border-left: 5px solid #4CAF50;
+        }
+        
+        /* Button styling */
+        .stButton button {
+            border-radius: 8px;
+            padding: 0.5rem 1rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            width: 100%;
+            margin-bottom: 0.5rem;
+        }
+        .stButton button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        /* Example buttons with custom colors */
+        .example-btn-1 button {
+            background-color: #5c6bc0;
+            color: white;
+        }
+        .example-btn-2 button {
+            background-color: #26a69a;
+            color: white;
+        }
+        .example-btn-3 button {
+            background-color: #ec407a;
+            color: white;
+        }
+        .example-btn-4 button {
+            background-color: #ffa726;
+            color: white;
+        }
+        .example-btn-5 button {
+            background-color: #7e57c2;
+            color: white;
+        }
+        
+        /* Footer styling */
+        .footer {
+            text-align: center;
+            margin-top: 2rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e0e0e0;
+            font-size: 0.8rem;
+            color: #666;
+        }
+        
+        /* Card layout for examples */
+        .card-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        
+        .card {
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            background-color: white;
+            transition: transform 0.2s;
+            height: 100%;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        /* Loading animation */
+        .loading-spinner {
+            text-align: center;
+            padding: 2rem;
+        }
+        
+        /* Tab styling */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 10px;
+        }
+        
+        .stTabs [data-baseweb="tab"] {
+            border-radius: 4px 4px 0px 0px;
+            padding: 10px 20px;
+            background-color: #f0f2f6;
+        }
+        
+        .stTabs [aria-selected="true"] {
+            background-color: #4CAF50 !important;
+            color: white !important;
+        }
+        
+        /* Hide Streamlit branding */
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+    </style>
+    """, unsafe_allow_html=True)
+
+add_custom_css()
+
+# Header with logo
+st.markdown("""
+<div class="header-container">
+    <h1>Urdu to Roman Urdu Translator</h1>
+    <p>Neural Machine Translation for Urdu Poetry and Text</p>
+</div>
+""", unsafe_allow_html=True)
+
+# Model definitions (unchanged)
 class Encoder(nn.Module):
     def __init__(self, input_size, embed_size, hidden_size, num_layers=1, dropout=0.1):
         super(Encoder, self).__init__()
@@ -159,7 +309,7 @@ class Seq2Seq(nn.Module):
         
         return outputs
 
-# Helper function to load model
+# Helper function to load model (unchanged)
 @st.cache_resource
 def load_model():
     try:
@@ -209,9 +359,8 @@ def load_model():
         st.error(traceback.format_exc())
         return None, None, None, None
 
-# Helper functions
+# Helper functions (unchanged)
 def merge_pair(tokens, pair, new_token):
-    """Merge a specific pair in a sequence."""
     result = []
     i = 0
     while i < len(tokens):
@@ -224,7 +373,6 @@ def merge_pair(tokens, pair, new_token):
     return result
 
 def tokenize_urdu(text, urdu_merges, urdu_vocab_map):
-    """Tokenize Urdu text with word boundary markers."""
     # Clean text
     text = unicodedata.normalize('NFC', text)
     text = re.sub(r'[^\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\u0900-\u097F\s\n]', '', text)
@@ -249,7 +397,6 @@ def tokenize_urdu(text, urdu_merges, urdu_vocab_map):
     return tokens, indices
 
 def translate_text(text, model, urdu_merges, urdu_vocab_map, roman_vocab_map):
-    """Translate Urdu text to Roman Urdu."""
     try:
         # Tokenize
         _, indices = tokenize_urdu(text, urdu_merges, urdu_vocab_map)
@@ -277,39 +424,105 @@ def translate_text(text, model, urdu_merges, urdu_vocab_map, roman_vocab_map):
         return roman_text
     except Exception as e:
         import traceback
-        return f"Translation error: {str(e)}\n{traceback.format_exc()}"
+        return f"Translation error: {str(e)}"
 
-# Example ghazals
-example_1 = """میری نوائے شوق سے شور حریم ذات میں غلغلہ ہائے الاماں بت کدۂ صفات میں حور و فرشتہ ہیں اسیر میرے تخیلات میں میری نگاہ سے خلل تیری تجلیات میں گرچہ ہے میری جستجو دیر و حرم کی نقشہ بند میری فغاں سے رستخیز کعبہ و سومنات میں گاہ مری نگاہ تیز چیر گئی دل وجود گاہ الجھ کے رہ گئی میرے توہمات میں تو نے یہ کیا غضب کیا مجھ کو بھی فاش کر دیا میں ہی تو ایک راز تھا سینۂ کائنات میں"""
+# Example poetry
+example_1 = """دل نے وفا کے نام پر کار وفا نہیں کیا خود کو ہلاک کر لیا خود کو فدا نہیں کیا خیرہ سران شوق کا کوئی نہیں ہے جنبہ دار شہر میں اس گروہ نے کس کو خفا نہیں کیا جو بھی ہو تم پہ معترض اس کو یہی جواب دو آپ بہت شریف ہیں آپ نے کیا نہیں کیا نسبت علم ہے بہت حاکم وقت کو عزیز اس نے تو کار جہل بھی بے علما نہیں کیا جس کو بھی شیخ و شاہ نے حکم خدا دیا قرار ہم نے نہیں کیا وہ کام ہاں بہ خدا نہیں کیا"""
 
-example_2 = """سب رنگ میں اس گل کی مرے شان ہے موجود غافل تو ذرا دیکھ وہ ہر آن ہے موجود ہر تار کا دامن کے مرے کر کے تبرک سربستہ ہر اک خار بیابان ہے موجود عریانی تن ہے یہ بہ از خلعت شاہی ہم کو یہ ترے عشق میں سامان ہے موجود کس طرح لگاوے کوئی داماں کو ترے ہاتھ ہونے کو تو اب دست و گریبان ہے موجود لیتا ہی رہا رات ترے رخ کی بلائیں تو پوچھ لے یہ زلف پریشان ہے موجود تم چشم حقیقت سے اگر آپ کو دیکھو آئینۂ حق میں دل انسان ہے موجود کہتا ہے ظفرؔ ہیں یہ سخن آگے سبھوں کے جو کوئی یہاں صاحب عرفان ہے موجود"""
+example_2 = """دیا سا دل کے خرابے میں جل رہا ہے میاں دیے کے گرد کوئی عکس چل رہا ہے میاں یہ روح رقص چراغاں ہے اپنے حلقے میں یہ جسم سایہ ہے اور سایہ ڈھل رہا میاں یہ آنکھ پردہ ہے اک گردش تحیر کا یہ دل نہیں ہے بگولہ اچھل رہا ہے میاں کبھی کسی کا گزرنا کبھی ٹھہر جانا مرے سکوت میں کیا کیا خلل رہا ہے میاں کسی کی راہ میں افلاک زیر پا ہوتے یہاں تو پاؤں سے صحرا نکل رہا ہے میاں ہجوم شوخ میں یہ دل ہی بے غرض نکلا چلو کوئی تو حریفانہ چل رہا ہے میاں تجھے ابھی سے پڑی ہے کہ فیصلہ ہو جائے نہ جانے کب سے یہاں وقت ٹل رہا ہے میاں طبیعتوں ہی کے ملنے سے تھا مزہ باقی سو وہ مزہ بھی کہاں آج کل رہا ہے میاں غموں کی فصل میں جس غم کو رائیگاں سمجھیں خوشی تو یہ ہے کہ وہ غم بھی پھل رہا ہے میاں لکھا نصیرؔ نے ہر رنگ میں سفید و"""
 
-example_3 = """جب سے قریب ہو کے چلے زندگی سے ہم خود اپنے آئنے کو لگے اجنبی سے ہم کچھ دور چل کے راستے سب ایک سے لگے ملنے گئے کسی سے مل آئے کسی سے ہم اچھے برے کے فرق نے بستی اجاڑ دی مجبور ہو کے ملنے لگے ہر کسی سے ہم شائستہ محفلوں کی فضاؤں میں زہر تھا زندہ بچے ہیں ذہن کی آوارگی سے ہم اچھی بھلی تھی دنیا گزارے کے واسطے الجھے ہوئے ہیں اپنی ہی خود آگہی سے ہم جنگل میں دور تک کوئی دشمن نہ کوئی دوست مانوس ہو چلے ہیں مگر بمبئی سے ہم"""
+example_3 = """بجا کہ آنکھ میں نیندوں کے سلسلے بھی نہیں شکست خواب کے اب مجھ میں حوصلے بھی نہیں نہیں نہیں یہ خبر دشمنوں نے دی ہوگی وہ آئے آ کے چلے بھی گئے ملے بھی نہیں یہ کون لوگ اندھیروں کی بات کرتے ہیں ابھی تو چاند تری یاد کے ڈھلے بھی نہیں ابھی سے میرے رفوگر کے ہاتھ تھکنے لگے ابھی تو چاک مرے زخم کے سلے بھی نہیں خفا اگرچہ ہمیشہ ہوئے مگر اب کے وہ برہمی ہے کہ ہم سے انہیں گلے بھی نہیں"""
 
-# Create columns for buttons
-col1, col2, col3 = st.columns(3)
+example_4 = """زحال مسکیں مکن تغافل دورائے نیناں بنائے بتیاں کہ تاب ہجراں ندارم اے جاں نہ لیہو کاہے لگائے چھتیاں شبان ہجراں دراز چوں زلف و روز وصلت چوں عمر کوتاہ سکھی پیا کو جو میں نہ دیکھوں تو کیسے کاٹوں اندھیری رتیاں یکایک از دل دو چشم جادو بصد فریبم بہ برد تسکیں کسے پڑی ہے جو جا سناوے پیارے پی کو ہماری بتیاں چوں شمع سوزاں چوں ذرہ حیراں ز مہر آں مہ بگشتم آخر نہ نیند نیناں نہ انگ چیناں نہ آپ آوے نہ بھیجے پتیاں بحق آں مہ کہ روز محشر بداد مارا فریب خسروؔ سپیت من کے دورائے راکھوں جو جائے پاؤں پیا کی کھتیاں"""
 
-with col1:
-    if st.button("Example 1"):
-        st.session_state.selected_text = example_1
+example_5 = """گر خامشی سے فائدہ اخفائے حال ہے خوش ہوں کہ میری بات سمجھنی محال ہے کس کو سناؤں حسرت اظہار کا گلہ دل فرد جمع و خرچ زباں ہائے لال ہے کس پردہ میں ہے آئنہ پرداز اے خدا رحمت کہ عذر خواہ لب بے سوال ہے ہے ہے خدا نخواستہ وہ اور دشمنی اے شوق منفعل یہ تجھے کیا خیال ہے مشکیں لباس کعبہ علی کے قدم سے جان ناف زمین ہے نہ کہ ناف غزال ہے وحشت پہ میری عرصۂ آفاق تنگ تھا دریا زمین کو عرق انفعال ہے ہستی کے مت فریب میں آ جائیو اسدؔ عالم تمام حلقۂ دام خیال ہے پہلو تہی نہ کر غم و اندوہ سے اسدؔ دل وقف درد کر کہ فقیروں کا مال ہے"""
 
-with col2:
-    if st.button("Example 2"):
-        st.session_state.selected_text = example_2
+# Create tabs for different app modes
+tab1, tab2 = st.tabs(["📜 Example Ghazals", "✍️ Custom Text"])
 
-with col3:
-    if st.button("Example 3"):
-        st.session_state.selected_text = example_3
+with tab1:
+    st.markdown("### Select a ghazal to translate")
+    
+    # Organize example buttons into a grid of cards
+    st.markdown('<div class="card-container">', unsafe_allow_html=True)
+    
+    # Example 1 card
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
+    with col1:
+        st.markdown('<div class="example-btn-1">', unsafe_allow_html=True)
+        if st.button("Ghazal 1"):
+            st.session_state.selected_text = example_1
+            st.session_state.current_tab = "tab1"
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+    with col2:
+        st.markdown('<div class="example-btn-2">', unsafe_allow_html=True)
+        if st.button("Ghazal 2"):
+            st.session_state.selected_text = example_2
+            st.session_state.current_tab = "tab1"
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+    with col3:
+        st.markdown('<div class="example-btn-3">', unsafe_allow_html=True)
+        if st.button("Ghazal 3"):
+            st.session_state.selected_text = example_3
+            st.session_state.current_tab = "tab1"
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+    with col4:
+        st.markdown('<div class="example-btn-4">', unsafe_allow_html=True)
+        if st.button("Ghazal 4"):
+            st.session_state.selected_text = example_4
+            st.session_state.current_tab = "tab1"
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+    with col5:
+        st.markdown('<div class="example-btn-5">', unsafe_allow_html=True)
+        if st.button("Ghazal 5"):
+            st.session_state.selected_text = example_5
+            st.session_state.current_tab = "tab1"
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+
+with tab2:
+    st.markdown("### Enter your own Urdu text")
+    
+    # Text area for custom input
+    custom_text = st.text_area(
+        "Type or paste Urdu text here:", 
+        height=150,
+        key="custom_text_input",
+        help="Enter Urdu text you'd like to translate to Roman Urdu"
+    )
+    
+    if st.button("Translate Custom Text", key="translate_custom"):
+        if custom_text:
+            st.session_state.selected_text = custom_text
+            st.session_state.current_tab = "tab2"
+        else:
+            st.warning("Please enter some Urdu text first.")
 
 # Display selected text and translation
 if "selected_text" in st.session_state:
-    # Display selected Urdu text
-    st.subheader("Urdu Text:")
-    st.write(st.session_state.selected_text)
+    st.markdown("---")
+    
+    # Create columns for source and target
+    col_source, col_target = st.columns(2)
+    
+    with col_source:
+        st.markdown("### Original Urdu Text:")
+        st.markdown(f"""
+        <div style="background-color:#f8f9fa; padding:15px; border-radius:10px; border-left:5px solid #5c6bc0; 
+                     direction:rtl; text-align:right; font-family:'Jameel Noori Nastaleeq', Arial, sans-serif; font-size:18px;">
+            {st.session_state.selected_text}
+        </div>
+        """, unsafe_allow_html=True)
     
     # Load model if not already loaded
     if "model_loaded" not in st.session_state:
-        with st.spinner("Loading model..."):
+        with st.spinner("Loading translation model..."):
             model, urdu_vocab_map, roman_vocab_map, urdu_merges = load_model()
             if model:
                 st.session_state.model = model
@@ -319,18 +532,57 @@ if "selected_text" in st.session_state:
                 st.session_state.model_loaded = True
     
     # Translate and display
-    if "model_loaded" in st.session_state:
-        with st.spinner("Translating..."):
-            translation = translate_text(
-                st.session_state.selected_text,
-                st.session_state.model,
-                st.session_state.urdu_merges,
-                st.session_state.urdu_vocab_map,
-                st.session_state.roman_vocab_map
-            )
+    with col_target:
+        st.markdown("### Roman Urdu Translation:")
         
-        # Display translation
-        st.subheader("Roman Urdu Translation:")
-        st.write(translation)
-else:
-    st.write("Click on any example button to see the translation.")
+        if "model_loaded" in st.session_state:
+            # Check if we've already translated this text
+            cache_key = f"trans_{st.session_state.selected_text[:20]}"
+            if cache_key not in st.session_state:
+                with st.spinner("Translating..."):
+                    translation = translate_text(
+                        st.session_state.selected_text,
+                        st.session_state.model,
+                        st.session_state.urdu_merges,
+                        st.session_state.urdu_vocab_map,
+                        st.session_state.roman_vocab_map
+                    )
+                    st.session_state[cache_key] = translation
+            else:
+                translation = st.session_state[cache_key]
+            
+            # Display translation in styled box
+            st.markdown(f"""
+            <div style="background-color:#f8f9fa; padding:15px; border-radius:10px; border-left:5px solid #26a69a; 
+                      font-family:Arial, sans-serif; font-size:16px;">
+                {translation}
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.error("Error: Could not load the translation model.")
+
+    # Add model information section
+    with st.expander("About the Translation Model"):
+        st.markdown("""
+        ### Model Architecture
+        This translator uses a Sequence-to-Sequence model with attention mechanism:
+        
+        - **Encoder**: Bidirectional LSTM with 1 layer
+        - **Decoder**: LSTM with 2 layers and Bahdanau attention
+        - **Embeddings**: 128-dimensional for both languages
+        - **Tokenization**: Specialized BPE with word boundary markers for Urdu
+        
+        ### Limitations
+        The current model has several limitations:
+        - Limited vocabulary coverage
+        - May struggle with complex poetic expressions
+        - Translation quality varies depending on input complexity
+        """)
+
+# Add footer with project information
+st.markdown("""
+<div class="footer">
+    <p>Urdu to Roman Urdu Neural Machine Translation | Developed by Zeeshan Khalid & Zahid Iqbal</p>
+    <p>MS Data Science Project | Instructor: Dr. Muhammad Usama</p>
+</div>
+""", unsafe_allow_html=True)
